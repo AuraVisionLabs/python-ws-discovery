@@ -15,6 +15,8 @@ import struct
 import threading
 import select
 
+from queue import Queue
+
 from .udp import UDPMessage
 from .envelope import SoapEnvelope
 from .actions import *
@@ -54,6 +56,28 @@ class _StoppableDaemonThread(threading.Thread):
         Use join() to wait, until thread really has been stopped
         """
         self._quitEvent.set()
+
+class ProbingDeviceMonitorThread(_StoppableDaemonThread):
+    def __init__(self, wsd):
+        self._probers = {}
+        self._wsd = wsd
+        self._queue = Queue()
+        super(ProbingDeviceMonitorThread, self).__init__()
+
+    def addProbe(self, env, addr):
+        self._queue.put((env, addr))
+
+    def _processProbes(self):
+        if self._queue.empty():
+            time.sleep(0.1)
+            return
+        env, addr = self._queue.get()
+        self._probers[addr] = {'env':env, 'time':time.time(), 'addr':addr}
+        print(self._probers)
+
+    def run(self):
+        while not self._quitEvent.wait(_NETWORK_ADDRESSES_CHECK_TIMEOUT):
+            self._processProbes()
 
 
 class AddressMonitorThread(_StoppableDaemonThread):
@@ -336,6 +360,7 @@ class WSDiscovery:
         elif env.getAction() == ACTION_PROBE:
             services = self._filterServices(list(self._localServices.values()), env.getTypes(), env.getScopes())
             self._sendProbeMatch(services, env.getMessageId(), addr)
+            self._probeMonitorThread.addProbe(env, addr)
 
         elif env.getAction() == ACTION_RESOLVE:
             if env.getEPR() in self._localServices:
@@ -489,6 +514,9 @@ class WSDiscovery:
         if self._networkingThread is not None:
             return
 
+        self._probeMonitorThread = ProbingDeviceMonitorThread(self)
+        self._probeMonitorThread.start()
+
         self._networkingThread = NetworkingThread(self)
         self._networkingThread.start()
 
@@ -500,9 +528,11 @@ class WSDiscovery:
         if self._networkingThread is None:
             return
 
+        self._probeMonitorThread.schedule_stop()
         self._networkingThread.schedule_stop()
         self._addrsMonitorThread.schedule_stop()
 
+        self._probeMonitorThread.join()
         self._networkingThread.join()
         self._addrsMonitorThread.join()
 
@@ -578,4 +608,3 @@ class WSDiscovery:
         self._sendHello(service)
 
         time.sleep(0.001)
-

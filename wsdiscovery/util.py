@@ -207,16 +207,17 @@ def getQNameFromValue(value, node):
     return QName(ns, localName)
 
 
-def _getNetworkAddrs():
+def _getNetworkAddrs(interface=None):
     result = []
 
     for if_name in netifaces.interfaces():
-        iface_info = netifaces.ifaddresses(if_name)
-        if netifaces.AF_INET in iface_info:
-            for addrDict in iface_info[netifaces.AF_INET]:
-                addr = addrDict['addr']
-                if addr != '127.0.0.1':
-                    result.append(addr)
+        if interface is None or if_name == interface:
+            iface_info = netifaces.ifaddresses(if_name)
+            if netifaces.AF_INET in iface_info:
+                for addrDict in iface_info[netifaces.AF_INET]:
+                    addr = addrDict['addr']
+                    if addr != '127.0.0.1':
+                        result.append(addr)
     return result
 
 
@@ -244,4 +245,3 @@ def showEnv(env):
     print("Metadata Version: %s" % env.getMetadataVersion())
     print("Probe Matches: %s" % env.getProbeResolveMatches())
     print("-----------------------------")
-

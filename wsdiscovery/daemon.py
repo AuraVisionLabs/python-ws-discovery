@@ -88,7 +88,7 @@ class AddressMonitorThread(_StoppableDaemonThread):
         self._updateAddrs()
 
     def _updateAddrs(self):
-        addrs = set(_getNetworkAddrs())
+        addrs = set(_getNetworkAddrs(self._wsd.ifname))
 
         disappeared = self._addrs.difference(addrs)
         new = addrs.difference(self._addrs)
@@ -288,7 +288,9 @@ class NetworkingThread(_StoppableDaemonThread):
 
 class WSDiscovery:
 
-    def __init__(self, uuid_=None, capture=None):
+    def __init__(self, ifname=None, uuid_=None, capture=None):
+
+        self.ifname = ifname
 
         self._networkingThread = None
         self._serverStarted = False

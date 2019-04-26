@@ -8,7 +8,7 @@ from .util import _getNetworkAddrs
 
 class Service:
 
-    def __init__(self, types, scopes, xAddrs, epr, instanceId):
+    def __init__(self, types, scopes, xAddrs, epr, instanceId, addr=None):
         self._types = types
         self._scopes = scopes
         self._xAddrs = xAddrs
@@ -16,6 +16,8 @@ class Service:
         self._instanceId = instanceId
         self._messageNumber = 0
         self._metadataVersion = 1
+
+        self._addr = addr
 
     def getTypes(self):
         return self._types
@@ -42,6 +44,12 @@ class Service:
             else:
                 ret.append(xAddr)
         return ret
+
+    def setAddr(self, addr):
+        self._addr = addr
+
+    def getAddr(self):
+        return self._addr
 
     def setXAddrs(self, xAddrs):
         self._xAddrs = xAddrs
@@ -74,5 +82,3 @@ class Service:
 
     def incrementMessageNumber(self):
         self._messageNumber = self._messageNumber + 1
-
-

@@ -71,9 +71,8 @@ class ProbingDeviceMonitorThread(_StoppableDaemonThread):
         if self._queue.empty():
             time.sleep(0.1)
             return
-        env, addr = self._queue.get()
+        env, (addr,_) = self._queue.get()
         self._probers[addr] = {'env':env, 'time':time.time(), 'addr':addr}
-        print(self._probers)
 
     def run(self):
         while not self._quitEvent.wait(_NETWORK_ADDRESSES_CHECK_TIMEOUT):
@@ -240,14 +239,22 @@ class NetworkingThread(_StoppableDaemonThread):
         data = createSOAPMessage(msg.getEnv()).encode("UTF-8")
 
         if msg.msgType() == UDPMessage.UNICAST:
-            self._uniOutSocket.sendto(data, (msg.getAddr(), msg.getPort()))
+            try:
+                self._uniOutSocket.sendto(data, (msg.getAddr(), msg.getPort()))
+            except OSError:
+                return
+
             if self._capture:
                 self._capture.write("%i SEND %s:%s\n" % (self._seqnum, msg.getAddr(), msg.getPort()))
                 self._capture.write(data.decode("utf-8") + "\n")
                 self._seqnum += 1
         else:
             for sock in list(self._multiOutUniInSockets.values()):
-                sock.sendto(data, (msg.getAddr(), msg.getPort()))
+                try:
+                    sock.sendto(data, (msg.getAddr(), msg.getPort()))
+                except OSError:
+                    continue
+
                 if self._capture:
                     self._capture.write("%i SEND %s:%s\n" % (self._seqnum, msg.getAddr(), msg.getPort()))
                     self._capture.write(data.decode("utf-8") + "\n")
@@ -312,6 +319,7 @@ class WSDiscovery:
         else:
             self.uuid = uuid.uuid4().urn
 
+
     def setRemoteServiceHelloCallback(self, cb, types=None, scopes=None):
         """Set callback, which will be called when new service appeared online
         and sent Hi message
@@ -351,13 +359,13 @@ class WSDiscovery:
     def handleEnv(self, env, addr):
         if (env.getAction() == ACTION_PROBE_MATCH):
             for match in env.getProbeResolveMatches():
-                self._addRemoteService(Service(match.getTypes(), match.getScopes(), match.getXAddrs(), match.getEPR(), 0))
+                self._addRemoteService(Service(match.getTypes(), match.getScopes(), match.getXAddrs(), match.getEPR(), 0, addr))
                 if match.getXAddrs() is None or len(match.getXAddrs()) == 0:
                     self._sendResolve(match.getEPR())
 
         elif env.getAction() == ACTION_RESOLVE_MATCH:
             for match in env.getProbeResolveMatches():
-                self._addRemoteService(Service(match.getTypes(), match.getScopes(), match.getXAddrs(), match.getEPR(), 0))
+                self._addRemoteService(Service(match.getTypes(), match.getScopes(), match.getXAddrs(), match.getEPR(), 0, addr))
 
         elif env.getAction() == ACTION_PROBE:
             services = self._filterServices(list(self._localServices.values()), env.getTypes(), env.getScopes())
@@ -610,3 +618,9 @@ class WSDiscovery:
         self._sendHello(service)
 
         time.sleep(0.001)
+
+    def getProbingDevices(self):
+        if not self._serverStarted:
+            return []
+
+        return self._probeMonitorThread._probers

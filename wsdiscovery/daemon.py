@@ -622,4 +622,4 @@ class WSDiscovery:
     def getProbingDevices(self):
         if not self._serverStarted:
             return []
-        return [p for p in self._probeMonitorThread._probers if p not in set(_getNetworkAddrs(self.ifname))]
+        return [p for p in set(self._probeMonitorThread._probers) if p not in set(_getNetworkAddrs(self.ifname))]
